@@ -5,19 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#080808" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>Monthly Tracker — MWT</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #root { height: 100%; background: #080808; }
-    body { font-family: 'IBM Plex Sans', sans-serif; -webkit-font-smoothing: antialiased; }
-  </style>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } html, body, #root { height: 100%; background: #080808; } body { font-family: 'IBM Plex Sans', sans-serif; }</style>
 </head>
 <body>
   <div id="root"></div>
@@ -25,7 +17,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel" data-type="module">
-// Monthly Service Tracker v3
+// Monthly Service Tracker v4
 // AquaField companion tool · McMillan Water Treatment
 // No ?. or ?? operators — Android Chrome compatible
 
@@ -41,15 +33,18 @@ var C = {
   red: "#ef4444", redDim: "#1a0606",
   yellow: "#eab308", yellowDim: "#1a1506",
   orange: "#f97316", orangeDim: "#1a0f06",
+  purple: "#a855f7", purpleDim: "#150a1e",
   text: "#e8e8e8", soft: "#777777", muted: "#444444"
 };
 
 var STORAGE_KEY = "mwt_monthly_tracker_v1";
 var MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+var LOOP_TYPES = ["Condensing Loop", "Chiller Loop", "Boiler Loop"];
+var LOOP_COLORS = { "Condensing Loop": C.cyan, "Chiller Loop": "#3b82f6", "Boiler Loop": C.orange };
 
 function loadData() {
   try { var raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
-  return { chains: [], extraWork: [], extraWorkDone: [] };
+  return { chains: [], extraWork: [], extraWorkDone: [], workdaysLeft: "" };
 }
 
 function saveData(data) {
@@ -60,62 +55,35 @@ function uid() { return "id_" + Date.now() + "_" + Math.random().toString(36).su
 
 function todayStr() {
   var d = new Date();
-  return String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0") + "/" + d.getFullYear();
+  return String(d.getMonth()+1).padStart(2,"0") + "/" + String(d.getDate()).padStart(2,"0") + "/" + d.getFullYear();
 }
 
 function todayISO() {
   var d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 }
 
 function isoToDisplay(iso) {
   if (!iso) return "";
-  var p = iso.split("-");
-  return p[1] + "/" + p[2] + "/" + p[0];
+  var p = iso.split("-"); return p[1] + "/" + p[2] + "/" + p[0];
 }
 
 function displayToISO(disp) {
   if (!disp) return "";
   var p = disp.split("/");
   if (p.length < 3) return "";
-  return p[2] + "-" + p[0].padStart(2, "0") + "-" + p[1].padStart(2, "0");
+  return p[2] + "-" + p[0].padStart(2,"0") + "-" + p[1].padStart(2,"0");
 }
 
 function getCurrentMonthKey() {
   var d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
 }
 
 function getMonthLabel(key) {
   if (!key) return "";
-  var parts = key.split("-");
-  return MONTH_NAMES[parseInt(parts[1], 10) - 1] + " " + parts[0];
-}
-
-// ─── Federal Holidays ───
-function getFederalHolidays(year) {
-  var h = [];
-  h.push(new Date(year, 0, 1).getTime());
-  var mem = new Date(year, 4, 31); while (mem.getDay() !== 1) mem.setDate(mem.getDate() - 1); h.push(mem.getTime());
-  h.push(new Date(year, 6, 4).getTime());
-  var lab = new Date(year, 8, 1); while (lab.getDay() !== 1) lab.setDate(lab.getDate() + 1); h.push(lab.getTime());
-  var tg = new Date(year, 10, 1); var cnt = 0; while (cnt < 4) { if (tg.getDay() === 4) cnt++; if (cnt < 4) tg.setDate(tg.getDate() + 1); } h.push(tg.getTime());
-  var bf = new Date(tg.getTime()); bf.setDate(bf.getDate() + 1); h.push(bf.getTime());
-  h.push(new Date(year, 11, 25).getTime());
-  return h;
-}
-
-function isHoliday(date, holidays) {
-  var t = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  for (var i = 0; i < holidays.length; i++) { if (holidays[i] === t) return true; } return false;
-}
-
-function getRemainingWorkdays() {
-  var now = new Date(); var year = now.getFullYear(); var month = now.getMonth();
-  var lastDay = new Date(year, month + 1, 0).getDate(); var today = now.getDate();
-  var hols = getFederalHolidays(year); var c = 0;
-  for (var d = today; d <= lastDay; d++) { var dt = new Date(year, month, d); if (dt.getDay() >= 1 && dt.getDay() <= 5 && !isHoliday(dt, hols)) c++; }
-  return c;
+  var p = key.split("-");
+  return MONTH_NAMES[parseInt(p[1],10)-1] + " " + p[0];
 }
 
 function sortAlpha(a, b) {
@@ -123,10 +91,11 @@ function sortAlpha(a, b) {
   return an < bn ? -1 : an > bn ? 1 : 0;
 }
 
-// ─── Export ───
 function downloadJSON(data, filename) {
-  var json = JSON.stringify(data, null, 2); var blob = new Blob([json], { type: "application/json" });
-  var url = URL.createObjectURL(blob); var a = document.createElement("a"); a.href = url; a.download = filename;
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -155,7 +124,7 @@ function Modal(props) {
       onClick: function(e) { e.stopPropagation(); }
     },
       React.createElement("div", { style: { fontSize: 16, fontWeight: 700, marginBottom: 8, color: props.data.titleColor || C.text } }, props.data.title),
-      props.data.content ? props.data.content : React.createElement("div", { style: { fontSize: 14, color: C.soft, marginBottom: 20, lineHeight: 1.6 } }, props.data.message),
+      React.createElement("div", { style: { fontSize: 14, color: C.soft, marginBottom: 20, lineHeight: 1.6 } }, props.data.message),
       React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
         (props.data.buttons || []).map(function(btn, i) {
           return React.createElement("button", {
@@ -170,37 +139,78 @@ function Modal(props) {
 
 // ─── Styles ───
 var S = {
-  input: { width: "100%", background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: "12px 14px", fontSize: 15, color: C.text, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", boxSizing: "border-box" },
-  textarea: { width: "100%", background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: "12px 14px", fontSize: 14, color: C.text, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", boxSizing: "border-box", minHeight: 60, resize: "vertical" },
-  label: { fontSize: 11, fontWeight: 700, color: C.soft, letterSpacing: "0.8px", fontFamily: "'IBM Plex Mono',monospace", marginBottom: 6, display: "block", textTransform: "uppercase" },
-  backBtn: { background: "none", border: "none", color: C.cyan, fontSize: 14, fontFamily: "'IBM Plex Sans',sans-serif", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: 12 },
-  primaryBtn: { width: "100%", background: C.cyan, border: "none", borderRadius: 8, padding: "14px", fontSize: 15, fontWeight: 700, color: "#000", fontFamily: "'IBM Plex Sans',sans-serif", cursor: "pointer" },
-  fab: { position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: "50%", background: C.cyan, border: "none", color: "#000", fontSize: 28, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 20px rgba(14,165,233,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, fontFamily: "'IBM Plex Sans',sans-serif" },
-  badge: function(color, bg) { return { display: "inline-block", background: bg, color: color, fontSize: 10, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", padding: "3px 8px", borderRadius: 4, letterSpacing: "0.5px" }; },
-  emptyState: { textAlign: "center", padding: "50px 32px", color: C.muted },
-  deleteSmall: { background: C.redDim, border: "1px solid " + C.red + "33", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: C.red, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
-  toolBtn: { background: C.card, border: "1px solid " + C.border, borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Sans',sans-serif", display: "flex", alignItems: "center", gap: 8, width: "100%" }
+  input: { width: "100%", background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: "11px 14px", fontSize: 14, color: C.text, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", boxSizing: "border-box" },
+  textarea: { width: "100%", background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: "11px 14px", fontSize: 14, color: C.text, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", boxSizing: "border-box", minHeight: 70, resize: "vertical" },
+  label: { fontSize: 10, fontWeight: 700, color: C.soft, letterSpacing: "0.8px", fontFamily: "'IBM Plex Mono',monospace", marginBottom: 5, display: "block", textTransform: "uppercase" },
+  backBtn: { background: "none", border: "none", color: C.cyan, fontSize: 14, fontFamily: "'IBM Plex Sans',sans-serif", fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 12 },
+  primaryBtn: { width: "100%", background: C.cyan, border: "none", borderRadius: 8, padding: "13px", fontSize: 14, fontWeight: 700, color: "#000", fontFamily: "'IBM Plex Sans',sans-serif", cursor: "pointer" },
+  fab: { position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: "50%", background: C.cyan, border: "none", color: "#000", fontSize: 28, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 20px rgba(14,165,233,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
+  deleteSmall: { background: C.redDim, border: "1px solid " + C.red + "33", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600, color: C.red, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
+  saveBtn: function(color) { return { width: "100%", background: color || C.purple, border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, color: "#000", fontFamily: "'IBM Plex Sans',sans-serif", cursor: "pointer", marginTop: 4 }; },
+  toolBtn: function(color, bg) { return { flex: 1, background: bg, border: "1px solid " + color + "33", borderRadius: 8, padding: "10px", fontSize: 12, fontWeight: 600, color: color, cursor: "pointer", fontFamily: "'IBM Plex Sans',sans-serif", display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }; },
+  badge: function(color, bg) { return { display: "inline-block", background: bg, color: color, fontSize: 10, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", padding: "3px 8px", borderRadius: 4, letterSpacing: "0.5px" }; }
 };
 
-// ─── Main ───
+// ─── Main App ───
 function MonthlyTracker() {
   var _d = loadData();
   var _chains = useState(_d.chains); var chains = _chains[0]; var setChains = _chains[1];
   var _extraWork = useState(_d.extraWork || []); var extraWork = _extraWork[0]; var setExtraWork = _extraWork[1];
   var _extraWorkDone = useState(_d.extraWorkDone || []); var extraWorkDone = _extraWorkDone[0]; var setExtraWorkDone = _extraWorkDone[1];
+  var _workdaysLeft = useState(_d.workdaysLeft || ""); var workdaysLeft = _workdaysLeft[0]; var setWorkdaysLeft = _workdaysLeft[1];
 
   var _view = useState("dashboard"); var view = _view[0]; var setView = _view[1];
   var _activeChainId = useState(null); var activeChainId = _activeChainId[0]; var setActiveChainId = _activeChainId[1];
   var _activeStore = useState(null); var activeStore = _activeStore[0]; var setActiveStore = _activeStore[1];
-
-  var _chainName = useState(""); var chainName = _chainName[0]; var setChainName = _chainName[1];
-  var _storeName = useState(""); var storeName = _storeName[0]; var setStoreName = _storeName[1];
-  var _ewDesc = useState(""); var ewDesc = _ewDesc[0]; var setEwDesc = _ewDesc[1];
+  var _activeChainForStore = useState(null); var activeChainForStore = _activeChainForStore[0]; var setActiveChainForStore = _activeChainForStore[1];
+  var _storeTab = useState("info"); var storeTab = _storeTab[0]; var setStoreTab = _storeTab[1];
+  var _chemSub = useState(null); var chemSub = _chemSub[0]; var setChemSub = _chemSub[1];
+  var _chemType = useState("inhibitor"); var chemType = _chemType[0]; var setChemType = _chemType[1];
+  var _expandedTower = useState(null); var expandedTower = _expandedTower[0]; var setExpandedTower = _expandedTower[1];
+  var _expandedLoop = useState(null); var expandedLoop = _expandedLoop[0]; var setExpandedLoop = _expandedLoop[1];
+  var _showAddLoop = useState(false); var showAddLoop = _showAddLoop[0]; var setShowAddLoop = _showAddLoop[1];
+  var _showEwHistory = useState(false); var showEwHistory = _showEwHistory[0]; var setShowEwHistory = _showEwHistory[1];
+  var _showCompletedTasks = useState(false); var showCompletedTasks = _showCompletedTasks[0]; var setShowCompletedTasks = _showCompletedTasks[1];
+  var _addDateVal = useState(""); var addDateVal = _addDateVal[0]; var setAddDateVal = _addDateVal[1];
   var _search = useState(""); var search = _search[0]; var setSearch = _search[1];
   var _toast = useState(""); var toast = _toast[0]; var setToast = _toast[1];
   var _modal = useState(null); var modal = _modal[0]; var setModal = _modal[1];
-  var _showEwHistory = useState(false); var showEwHistory = _showEwHistory[0]; var setShowEwHistory = _showEwHistory[1];
-  var _addDateVal = useState(""); var addDateVal = _addDateVal[0]; var setAddDateVal = _addDateVal[1];
+
+  // Form fields
+  var _chainName = useState(""); var chainName = _chainName[0]; var setChainName = _chainName[1];
+  var _storeName = useState(""); var storeName = _storeName[0]; var setStoreName = _storeName[1];
+  var _ewDesc = useState(""); var ewDesc = _ewDesc[0]; var setEwDesc = _ewDesc[1];
+  var _taskDesc = useState(""); var taskDesc = _taskDesc[0]; var setTaskDesc = _taskDesc[1];
+  var _taskPriority = useState("normal"); var taskPriority = _taskPriority[0]; var setTaskPriority = _taskPriority[1];
+  var _chemAmount = useState(""); var chemAmount = _chemAmount[0]; var setChemAmount = _chemAmount[1];
+  var _chemUnit = useState("gal"); var chemUnit = _chemUnit[0]; var setChemUnit = _chemUnit[1];
+  var _loopType = useState("Condensing Loop"); var loopType = _loopType[0]; var setLoopType = _loopType[1];
+  var _loopName = useState(""); var loopName = _loopName[0]; var setLoopName = _loopName[1];
+  var _loopGpm = useState(""); var loopGpm = _loopGpm[0]; var setLoopGpm = _loopGpm[1];
+  var _nitritePPM = useState(""); var nitritePPM = _nitritePPM[0]; var setNitritePPM = _nitritePPM[1];
+
+  // Manager form fields
+  var _mgrName = useState(""); var mgrName = _mgrName[0]; var setMgrName = _mgrName[1];
+  var _mgrRole = useState(""); var mgrRole = _mgrRole[0]; var setMgrRole = _mgrRole[1];
+  var _mgrPhone = useState(""); var mgrPhone = _mgrPhone[0]; var setMgrPhone = _mgrPhone[1];
+  var _mgrNotes = useState(""); var mgrNotes = _mgrNotes[0]; var setMgrNotes = _mgrNotes[1];
+  var _editMgr = useState(null); var editMgr = _editMgr[0]; var setEditMgr = _editMgr[1];
+  var _showMgrForm = useState(false); var showMgrForm = _showMgrForm[0]; var setShowMgrForm = _showMgrForm[1];
+
+  // Info settings fields
+  var _bleedType = useState("setpoint"); var bleedType = _bleedType[0]; var setBleedType = _bleedType[1];
+  var _bleedSetpoint = useState(""); var bleedSetpoint = _bleedSetpoint[0]; var setBleedSetpoint = _bleedSetpoint[1];
+  var _bleedPulseCount = useState(""); var bleedPulseCount = _bleedPulseCount[0]; var setBleedPulseCount = _bleedPulseCount[1];
+  var _bleedPulseMins = useState(""); var bleedPulseMins = _bleedPulseMins[0]; var setBleedPulseMins = _bleedPulseMins[1];
+  var _bleedPulseSecs = useState(""); var bleedPulseSecs = _bleedPulseSecs[0]; var setBleedPulseSecs = _bleedPulseSecs[1];
+  var _inhDelivery = useState("cycle"); var inhDelivery = _inhDelivery[0]; var setInhDelivery = _inhDelivery[1];
+  var _inhCycleMins = useState(""); var inhCycleMins = _inhCycleMins[0]; var setInhCycleMins = _inhCycleMins[1];
+  var _inhCyclePct = useState(""); var inhCyclePct = _inhCyclePct[0]; var setInhCyclePct = _inhCyclePct[1];
+  var _inhPulseCount = useState(""); var inhPulseCount = _inhPulseCount[0]; var setInhPulseCount = _inhPulseCount[1];
+  var _inhPulseMins = useState(""); var inhPulseMins = _inhPulseMins[0]; var setInhPulseMins = _inhPulseMins[1];
+  var _inhPulseSecs = useState(""); var inhPulseSecs = _inhPulseSecs[0]; var setInhPulseSecs = _inhPulseSecs[1];
+  var _biocideMins = useState(""); var biocideMins = _biocideMins[0]; var setBiocideMins = _biocideMins[1];
+  var _storeNotes = useState(""); var storeNotes = _storeNotes[0]; var setStoreNotes = _storeNotes[1];
 
   var toastRef = useRef(null);
   var fileInputRef = useRef(null);
@@ -211,23 +221,66 @@ function MonthlyTracker() {
     toastRef.current = setTimeout(function() { setToast(""); }, 2500);
   }
 
-  useEffect(function() { saveData({ chains: chains, extraWork: extraWork, extraWorkDone: extraWorkDone }); }, [chains, extraWork, extraWorkDone]);
+  useEffect(function() { saveData({ chains: chains, extraWork: extraWork, extraWorkDone: extraWorkDone, workdaysLeft: workdaysLeft }); }, [chains, extraWork, extraWorkDone, workdaysLeft]);
 
+  // ─── Finders ───
   function findChain(id) { for (var i = 0; i < chains.length; i++) { if (chains[i].id === id) return chains[i]; } return null; }
 
+  // ─── Store helpers ───
+  function getStoreFromChain(chain, storeId) {
+    for (var i = 0; i < chain.stores.length; i++) { if (chain.stores[i].id === storeId) return chain.stores[i]; }
+    return null;
+  }
+
+  function getLiveStore() {
+    if (!activeChainForStore || !activeStore) return activeStore;
+    return getStoreFromChain(activeChainForStore, activeStore.id) || activeStore;
+  }
+
+  // ─── Counters ───
   function totalStoreCount() { var n = 0; for (var i = 0; i < chains.length; i++) n += chains[i].stores.length; return n; }
   function doneStoreCount() { var n = 0; for (var i = 0; i < chains.length; i++) { for (var j = 0; j < chains[i].stores.length; j++) { if (chains[i].stores[j].done) n++; } } return n; }
   function chainDoneCount(chain) { var n = 0; for (var i = 0; i < chain.stores.length; i++) { if (chain.stores[i].done) n++; } return n; }
+  function storeActiveTasks(store) {
+    var tasks = (store.tasks || []);
+    var n = 0; for (var i = 0; i < tasks.length; i++) { if (!tasks[i].done) n++; }
+    return n;
+  }
 
   function getProgressStats() {
     var total = totalStoreCount(); var done = doneStoreCount(); var remaining = total - done;
-    var workdays = getRemainingWorkdays();
+    var workdays = parseInt(workdaysLeft, 10);
+    if (isNaN(workdays) || workdays < 0) workdays = 0;
     var perDay = workdays > 0 ? Math.ceil(remaining / workdays) : remaining;
     var pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { total: total, done: done, remaining: remaining, workdays: workdays, perDay: perDay, pct: pct };
   }
 
-  // ═══ CRUD ═══
+  // ─── Open Store Info ───
+  function openStoreInfo(store, chain, tab) {
+    setActiveStore(store); setActiveChainForStore(chain);
+    setStoreTab(tab || "info"); setChemSub(null); setChemType("inhibitor");
+    setExpandedTower(null); setExpandedLoop(null); setShowAddLoop(false);
+    setShowCompletedTasks(false); setAddDateVal(todayISO());
+    var si = store.settings || {};
+    setBleedType(si.bleedType || "setpoint");
+    setBleedSetpoint(si.bleedSetpoint || "");
+    setBleedPulseCount(si.bleedPulseCount || "");
+    setBleedPulseMins(si.bleedPulseMins || "");
+    setBleedPulseSecs(si.bleedPulseSecs || "");
+    setInhDelivery(si.inhDelivery || "cycle");
+    setInhCycleMins(si.inhCycleMins || "");
+    setInhCyclePct(si.inhCyclePct || "");
+    setInhPulseCount(si.inhPulseCount || "");
+    setInhPulseMins(si.inhPulseMins || "");
+    setInhPulseSecs(si.inhPulseSecs || "");
+    setBiocideMins(si.biocideMins || "");
+    setStoreNotes(si.notes || "");
+    setNitritePPM("");
+    setView("storeInfo");
+  }
+
+  // ─── CRUD ───
   function handleAddChain() {
     if (!chainName.trim()) return;
     setChains(function(prev) { return prev.concat([{ id: uid(), name: chainName.trim(), stores: [] }]); });
@@ -241,7 +294,7 @@ function MonthlyTracker() {
 
   function handleAddStore() {
     if (!storeName.trim() || !activeChainId) return;
-    var ns = { id: uid(), name: storeName.trim(), done: false, doneDate: null, history: [] };
+    var ns = { id: uid(), name: storeName.trim(), done: false, doneDate: null, history: [], tasks: [], settings: null, chemicals: {} };
     setChains(function(prev) {
       return prev.map(function(c) { return c.id === activeChainId ? Object.assign({}, c, { stores: c.stores.concat([ns]) }) : c; });
     });
@@ -258,29 +311,16 @@ function MonthlyTracker() {
     setModal(null); showToast("Store removed");
   }
 
-  // Instant check-off with today's date
   function toggleStore(chainId, storeId) {
     setChains(function(prev) {
       return prev.map(function(c) {
         if (c.id === chainId) {
           return Object.assign({}, c, { stores: c.stores.map(function(s) {
             if (s.id === storeId) {
-              if (s.done) {
-                // Unchecking — remove today from history, unmark
-                var hist = (s.history || []).slice();
-                if (s.doneDate) {
-                  // Remove the last entry matching doneDate
-                  for (var i = hist.length - 1; i >= 0; i--) {
-                    if (hist[i].date === s.doneDate) { hist.splice(i, 1); break; }
-                  }
-                }
-                return Object.assign({}, s, { done: false, doneDate: null, history: hist });
-              } else {
-                // Checking — add today
-                var today = todayStr();
-                var newHist = (s.history || []).concat([{ date: today }]);
-                return Object.assign({}, s, { done: true, doneDate: today, history: newHist });
-              }
+              if (s.done) return Object.assign({}, s, { done: false, doneDate: null });
+              var today = todayStr();
+              var newHist = (s.history || []).concat([{ date: today }]);
+              return Object.assign({}, s, { done: true, doneDate: today, history: newHist });
             }
             return s;
           })});
@@ -290,17 +330,82 @@ function MonthlyTracker() {
     });
   }
 
-  // ═══ HISTORY — add/edit/delete dates ═══
-  function addDateToStore(chainId, storeId, dateISO) {
-    var dateDisp = isoToDisplay(dateISO);
-    if (!dateDisp) return;
+  // ─── Store Settings save ───
+  function saveStoreSettings(chainId, storeId, settings) {
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) return Object.assign({}, s, { settings: Object.assign({}, s.settings || {}, settings) });
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    showToast("Saved");
+  }
+
+  // ─── Tasks ───
+  function addTask(chainId, storeId) {
+    if (!taskDesc.trim()) return;
+    var t = { id: uid(), description: taskDesc.trim(), priority: taskPriority, done: false, addedAt: todayStr(), completedAt: null };
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) return Object.assign({}, s, { tasks: (s.tasks || []).concat([t]) });
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setTaskDesc(""); setTaskPriority("normal"); showToast("Task added");
+  }
+
+  function toggleTask(chainId, storeId, taskId) {
     setChains(function(prev) {
       return prev.map(function(c) {
         if (c.id === chainId) {
           return Object.assign({}, c, { stores: c.stores.map(function(s) {
             if (s.id === storeId) {
-              return Object.assign({}, s, { history: (s.history || []).concat([{ date: dateDisp }]) });
+              return Object.assign({}, s, { tasks: (s.tasks || []).map(function(t) {
+                if (t.id === taskId) return Object.assign({}, t, { done: !t.done, completedAt: !t.done ? todayStr() : null });
+                return t;
+              })});
             }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+  }
+
+  function deleteTask(chainId, storeId, taskId) {
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) return Object.assign({}, s, { tasks: (s.tasks || []).filter(function(t) { return t.id !== taskId; }) });
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setModal(null); showToast("Task deleted");
+  }
+
+  // ─── History ───
+  function addDateToStore(chainId, storeId, dateISO) {
+    var disp = isoToDisplay(dateISO); if (!disp) return;
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) return Object.assign({}, s, { history: (s.history || []).concat([{ date: disp }]) });
             return s;
           })});
         }
@@ -315,11 +420,7 @@ function MonthlyTracker() {
       return prev.map(function(c) {
         if (c.id === chainId) {
           return Object.assign({}, c, { stores: c.stores.map(function(s) {
-            if (s.id === storeId) {
-              var h = (s.history || []).slice();
-              h.splice(idx, 1);
-              return Object.assign({}, s, { history: h });
-            }
+            if (s.id === storeId) { var h = (s.history || []).slice(); h.splice(idx, 1); return Object.assign({}, s, { history: h }); }
             return s;
           })});
         }
@@ -330,17 +431,12 @@ function MonthlyTracker() {
   }
 
   function editDateInStore(chainId, storeId, idx, newISO) {
-    var dateDisp = isoToDisplay(newISO);
-    if (!dateDisp) return;
+    var disp = isoToDisplay(newISO); if (!disp) return;
     setChains(function(prev) {
       return prev.map(function(c) {
         if (c.id === chainId) {
           return Object.assign({}, c, { stores: c.stores.map(function(s) {
-            if (s.id === storeId) {
-              var h = (s.history || []).slice();
-              h[idx] = { date: dateDisp };
-              return Object.assign({}, s, { history: h });
-            }
+            if (s.id === storeId) { var h = (s.history || []).slice(); h[idx] = { date: disp }; return Object.assign({}, s, { history: h }); }
             return s;
           })});
         }
@@ -350,18 +446,123 @@ function MonthlyTracker() {
     showToast("Date updated");
   }
 
-  // ═══ RESET ═══
+  // ─── Chemicals ───
+  function addChemicalEntry(chainId, storeId, subKey, chemType2) {
+    if (!chemAmount.trim()) return;
+    var entry = { id: uid(), type: chemType2, amount: chemAmount.trim(), unit: chemUnit, month: getCurrentMonthKey(), addedAt: todayStr() };
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var chems = Object.assign({}, s.chemicals || {});
+              if (!chems[subKey]) chems[subKey] = {};
+              if (!chems[subKey][chemType2]) chems[subKey][chemType2] = [];
+              chems[subKey][chemType2] = chems[subKey][chemType2].concat([entry]);
+              return Object.assign({}, s, { chemicals: chems });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setChemAmount(""); showToast("Chemical added");
+  }
+
+  function addLoopChemEntry(chainId, storeId, loopName2) {
+    if (!chemAmount.trim()) return;
+    var entry = { id: uid(), amount: chemAmount.trim(), unit: chemUnit, month: getCurrentMonthKey(), addedAt: todayStr() };
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var chems = Object.assign({}, s.chemicals || {});
+              if (!chems[loopName2]) chems[loopName2] = [];
+              chems[loopName2] = chems[loopName2].concat([entry]);
+              return Object.assign({}, s, { chemicals: chems });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setChemAmount(""); showToast("Logged");
+  }
+
+  function deleteChemEntry(chainId, storeId, subKey, subType, entryId) {
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var chems = Object.assign({}, s.chemicals || {});
+              if (subType) {
+                if (chems[subKey] && chems[subKey][subType]) chems[subKey][subType] = chems[subKey][subType].filter(function(e) { return e.id !== entryId; });
+              } else {
+                if (chems[subKey]) chems[subKey] = chems[subKey].filter(function(e) { return e.id !== entryId; });
+              }
+              return Object.assign({}, s, { chemicals: chems });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    showToast("Removed");
+  }
+
+  // ─── Loops ───
+  function addLoop(chainId, storeId) {
+    if (!loopGpm.trim()) return;
+    var name = loopName.trim() || loopType;
+    var newLoop = { id: uid(), type: loopType, name: name, gpm: loopGpm.trim() };
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var si = Object.assign({}, s.settings || {});
+              si.loops = (si.loops || []).concat([newLoop]);
+              return Object.assign({}, s, { settings: si });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setLoopName(""); setLoopGpm(""); setShowAddLoop(false); showToast(name + " added");
+  }
+
+  function deleteLoop(chainId, storeId, loopId) {
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var si = Object.assign({}, s.settings || {});
+              si.loops = (si.loops || []).filter(function(l) { return l.id !== loopId; });
+              return Object.assign({}, s, { settings: si });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setModal(null); showToast("Loop removed");
+  }
+
+  // ─── Reset ───
   function handleReset() {
-    setModal({
-      title: "Reset All Stores?", titleColor: C.orange,
-      message: "This will uncheck all stores for a new month. Dates stay in history. Extra work is not affected.",
+    setModal({ title: "Reset All Stores?", titleColor: C.orange, message: "This will uncheck all stores. Dates stay in history. Tasks and extra work are not affected.",
       buttons: [
         { label: "↻ Reset All", bg: C.orangeDim, borderColor: C.orange + "33", color: C.orange, onClick: function() {
-          setChains(function(prev) {
-            return prev.map(function(c) {
-              return Object.assign({}, c, { stores: c.stores.map(function(s) { return Object.assign({}, s, { done: false, doneDate: null }); }) });
-            });
-          });
+          setChains(function(prev) { return prev.map(function(c) { return Object.assign({}, c, { stores: c.stores.map(function(s) { return Object.assign({}, s, { done: false, doneDate: null }); }) }); }); });
           setModal(null); showToast("All stores reset");
         }},
         { label: "Cancel", bg: C.card, borderColor: C.border, color: C.soft, onClick: function() { setModal(null); } }
@@ -369,7 +570,7 @@ function MonthlyTracker() {
     });
   }
 
-  // ═══ EXTRA WORK ═══
+  // ─── Extra Work ───
   function handleAddExtraWork() {
     if (!ewDesc.trim()) return;
     setExtraWork(function(prev) { return prev.concat([{ id: uid(), description: ewDesc.trim(), addedAt: todayStr() }]); });
@@ -385,16 +586,6 @@ function MonthlyTracker() {
     showToast("Done — moved to history");
   }
 
-  function deleteExtraWork(ewId) {
-    setExtraWork(function(prev) { return prev.filter(function(e) { return e.id !== ewId; }); });
-    setModal(null); showToast("Removed");
-  }
-
-  function deleteExtraWorkDone(ewId) {
-    setExtraWorkDone(function(prev) { return prev.filter(function(e) { return e.id !== ewId; }); });
-    showToast("Removed from history");
-  }
-
   function confirmDelete(title, message, onConfirm) {
     setModal({ title: title, titleColor: C.red, message: message, buttons: [
       { label: "Cancel", bg: C.card, borderColor: C.border, color: C.soft, onClick: function() { setModal(null); } },
@@ -402,10 +593,57 @@ function MonthlyTracker() {
     ]});
   }
 
-  // ═══ EXPORT / IMPORT ═══
+  // ─── Managers ───
+  function saveManager(chainId, storeId) {
+    if (!mgrName.trim()) return;
+    var mgr = { id: editMgr ? editMgr.id : uid(), name: mgrName.trim(), role: mgrRole.trim(), phone: mgrPhone.trim(), notes: mgrNotes.trim() };
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) {
+              var managers = s.managers || [];
+              if (editMgr) {
+                managers = managers.map(function(m) { return m.id === editMgr.id ? mgr : m; });
+              } else {
+                managers = managers.concat([mgr]);
+              }
+              return Object.assign({}, s, { managers: managers });
+            }
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setMgrName(""); setMgrRole(""); setMgrPhone(""); setMgrNotes(""); setEditMgr(null); setShowMgrForm(false);
+    showToast(editMgr ? "Manager updated" : "Manager added");
+  }
+
+  function deleteManager(chainId, storeId, mgrId) {
+    setChains(function(prev) {
+      return prev.map(function(c) {
+        if (c.id === chainId) {
+          return Object.assign({}, c, { stores: c.stores.map(function(s) {
+            if (s.id === storeId) return Object.assign({}, s, { managers: (s.managers || []).filter(function(m) { return m.id !== mgrId; }) });
+            return s;
+          })});
+        }
+        return c;
+      });
+    });
+    setModal(null); showToast("Manager removed");
+  }
+
+  // ─── Export/Import ───
   function exportAll() {
-    downloadJSON({ _type: "monthly_tracker_export", _level: "all", _exportedAt: new Date().toISOString(), _version: 3, chains: chains, extraWork: extraWork, extraWorkDone: extraWorkDone }, exportFilename("All"));
+    downloadJSON({ _type: "monthly_tracker_export", _level: "all", _exportedAt: new Date().toISOString(), _version: 4, chains: chains, extraWork: extraWork, extraWorkDone: extraWorkDone, workdaysLeft: workdaysLeft }, exportFilename("All"));
     showToast("Exported");
+  }
+
+  function exportStore(chainName, store) {
+    downloadJSON({ _type: "monthly_tracker_export", _level: "store", _exportedAt: new Date().toISOString(), _version: 4, chainName: chainName, store: store }, exportFilename(chainName + "_" + store.name));
+    showToast("Exported " + chainName + " #" + store.name);
   }
 
   function triggerImport() { if (fileInputRef.current) { fileInputRef.current.value = ""; fileInputRef.current.click(); } }
@@ -417,18 +655,87 @@ function MonthlyTracker() {
       try {
         var data = JSON.parse(ev.target.result);
         if (!data._type || data._type !== "monthly_tracker_export") { showToast("Not a valid file"); return; }
-        setModal({ title: "Import Data?", titleColor: C.orange, message: "Replace current data?", buttons: [
-          { label: "↻ Replace", bg: C.orangeDim, borderColor: C.orange + "33", color: C.orange, onClick: function() {
-            setChains(data.chains || []); setExtraWork(data.extraWork || []); setExtraWorkDone(data.extraWorkDone || []); setModal(null); showToast("Imported");
-          }},
-          { label: "Cancel", bg: C.card, borderColor: C.border, color: C.soft, onClick: function() { setModal(null); } }
-        ]});
-      } catch (err) { showToast("Error"); }
+
+        if (data._level === "store") {
+          // Single store import — find or create the chain, then add store
+          var importedStore = Object.assign({}, data.store, { id: uid() });
+          var importedChainName = data.chainName || "Unknown";
+          setChains(function(prev) {
+            // Find existing chain by name (case-insensitive)
+            var existingChain = null;
+            for (var i = 0; i < prev.length; i++) {
+              if (prev[i].name.toLowerCase() === importedChainName.toLowerCase()) { existingChain = prev[i]; break; }
+            }
+            if (existingChain) {
+              // Check if store number already exists
+              var storeExists = false;
+              for (var j = 0; j < existingChain.stores.length; j++) {
+                if (existingChain.stores[j].name === importedStore.name) { storeExists = true; break; }
+              }
+              if (storeExists) {
+                showToast(importedChainName + " #" + importedStore.name + " already exists");
+                return prev;
+              }
+              return prev.map(function(c) {
+                return c.id === existingChain.id ? Object.assign({}, c, { stores: c.stores.concat([importedStore]) }) : c;
+              });
+            } else {
+              // Create new chain
+              return prev.concat([{ id: uid(), name: importedChainName, stores: [importedStore] }]);
+            }
+          });
+          setModal(null);
+          showToast("Added " + importedChainName + " #" + importedStore.name);
+        } else {
+          // Full import
+          setModal({ title: "Import Data?", titleColor: C.orange, message: "Replace all current data with this file?", buttons: [
+            { label: "↻ Replace", bg: C.orangeDim, borderColor: C.orange + "33", color: C.orange, onClick: function() {
+              setChains(data.chains || []); setExtraWork(data.extraWork || []); setExtraWorkDone(data.extraWorkDone || []); if (data.workdaysLeft) setWorkdaysLeft(data.workdaysLeft);
+              setModal(null); showToast("Imported");
+            }},
+            { label: "Cancel", bg: C.card, borderColor: C.border, color: C.soft, onClick: function() { setModal(null); } }
+          ]});
+        }
+      } catch (err) { showToast("Error reading file"); }
     };
     reader.readAsText(file);
   }
 
-  // ═══ PROGRESS BAR ═══
+  // ─── Nitrite calculator ───
+  function calcNitrite(gallons, ppm) {
+    var needed = Math.max(0, 1400 - parseFloat(ppm));
+    var lbs = Math.round(((gallons * needed) / 100000) * 10) / 10;
+    var qts = Math.round((lbs / 2.5) * 10) / 10;
+    return { needed: needed, lbs: lbs, qts: qts };
+  }
+
+  // ─── Shared UI helpers ───
+  function sectionHeader(emoji, label, color) {
+    return React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: color, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 10 } }, emoji + " " + label);
+  }
+
+  function field(label, child) {
+    return React.createElement("div", { style: { marginBottom: 10 } }, React.createElement("label", { style: S.label }, label), child);
+  }
+
+  function inp(val, setter, ph, type) {
+    return React.createElement("input", { type: type || "text", placeholder: ph || "", value: val, onChange: function(e) { setter(e.target.value); }, style: S.input });
+  }
+
+  function typeToggle(options, val, setter) {
+    return React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 10 } },
+      options.map(function(opt) {
+        var sel = val === opt.key;
+        return React.createElement("button", { key: opt.key, style: { flex: 1, padding: "9px 6px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", background: sel ? C.cyanDim : C.bg, border: "2px solid " + (sel ? C.cyan : C.border), color: sel ? C.cyan : C.muted }, onClick: function() { setter(opt.key); } }, opt.label);
+      })
+    );
+  }
+
+  function card(children, accent) {
+    return React.createElement("div", { style: { background: C.card, border: "1px solid " + (accent ? accent + "22" : C.border), borderRadius: 10, padding: 14, marginBottom: 10 } }, children);
+  }
+
+  // ─── PROGRESS BAR ───
   function renderProgressBar() {
     var stats = getProgressStats();
     return React.createElement("div", { style: { padding: "16px 16px 12px", borderBottom: "1px solid " + C.border } },
@@ -437,20 +744,25 @@ function MonthlyTracker() {
         React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: stats.pct === 100 ? C.green : C.cyan, fontFamily: "'IBM Plex Mono',monospace" } }, stats.pct + "%")
       ),
       React.createElement("div", { style: { width: "100%", height: 8, background: C.border, borderRadius: 4, overflow: "hidden", marginBottom: 12 } },
-        React.createElement("div", { style: { width: stats.pct + "%", height: "100%", borderRadius: 4, background: stats.pct === 100 ? C.green : C.cyan, transition: "width 0.3s ease" } })
+        React.createElement("div", { style: { width: stats.pct + "%", height: "100%", borderRadius: 4, background: stats.pct === 100 ? C.green : C.cyan, transition: "width 0.3s" } })
       ),
-      React.createElement("div", { style: { display: "flex", gap: 12, flexWrap: "wrap" } },
+      React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" } },
         React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, React.createElement("span", { style: { color: C.green } }, "✓ "), stats.done + "/" + stats.total),
         React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, React.createElement("span", { style: { color: C.yellow } }, "● "), stats.remaining + " left"),
-        React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, React.createElement("span", { style: { color: C.cyan } }, "▸ "), stats.workdays + " workdays"),
-        stats.remaining > 0 ? React.createElement("div", { style: { fontSize: 11, color: stats.perDay > 5 ? C.red : C.orange, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 } }, "≈ " + stats.perDay + "/day") : null
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+          React.createElement("span", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, "▸"),
+          React.createElement("input", { type: "number", min: "0", max: "31", value: workdaysLeft, onChange: function(e) { setWorkdaysLeft(e.target.value); }, placeholder: "?", style: { width: 36, background: "transparent", border: "none", borderBottom: "1px solid " + C.muted, color: C.cyan, fontSize: 11, fontFamily: "'IBM Plex Mono',monospace", textAlign: "center", outline: "none", padding: "1px 2px" } }),
+          React.createElement("span", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, "days left")
+        ),
+        stats.remaining > 0 && stats.workdays > 0 ? React.createElement("div", { style: { fontSize: 11, color: stats.perDay > 5 ? C.red : C.orange, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700 } }, "≈ " + stats.perDay + "/day") : null
       )
     );
   }
 
-  // ═══ STORE CARD ═══
+  // ─── STORE CARD ───
   function renderStoreCard(chain, store) {
     var last3 = (store.history || []).slice(-3).reverse();
+    var activeTasks = storeActiveTasks(store);
     return React.createElement("div", {
       key: store.id,
       style: { background: C.card, border: "1px solid " + (store.done ? C.green + "22" : C.border), borderRadius: 10, padding: "12px 14px", marginBottom: 6, opacity: store.done ? 0.65 : 1 }
@@ -460,63 +772,63 @@ function MonthlyTracker() {
           style: { width: 24, height: 24, borderRadius: 6, border: "2px solid " + (store.done ? C.green : C.muted), background: store.done ? C.greenDim : "transparent", flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: C.green, fontWeight: 700 },
           onClick: function() { toggleStore(chain.id, store.id); }
         }, store.done ? "✓" : ""),
-        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
-          React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: store.done ? C.soft : C.text, textDecoration: store.done ? "line-through" : "none" } }, "#" + store.name),
+        React.createElement("div", { style: { flex: 1, minWidth: 0, cursor: "pointer" }, onClick: function() { toggleStore(chain.id, store.id); } },
+          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: store.done ? C.soft : C.text, textDecoration: store.done ? "line-through" : "none" } }, "#" + store.name),
+            activeTasks > 0 ? React.createElement("span", {
+              style: { width: 7, height: 7, borderRadius: "50%", background: C.orange, display: "inline-block", flexShrink: 0 }
+            }) : null
+          ),
           store.done && store.doneDate ? React.createElement("div", { style: { fontSize: 10, color: C.green, fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 } }, "✓ " + store.doneDate) : null,
           last3.length > 0 && !store.done ? React.createElement("div", { style: { marginTop: 4 } },
-            last3.map(function(h, i) {
-              return React.createElement("span", { key: i, style: { fontSize: 9, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginRight: 8 } }, h.date);
-            })
+            last3.map(function(h, i) { return React.createElement("span", { key: i, style: { fontSize: 9, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginRight: 8 } }, h.date); })
           ) : null
         ),
-        React.createElement("div", { style: { display: "flex", gap: 4, flexShrink: 0 } },
-          React.createElement("button", {
-            style: { background: C.cyanDim, border: "1px solid " + C.cyan + "33", borderRadius: 6, padding: "4px 8px", fontSize: 10, fontWeight: 600, color: C.cyan, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
-            onClick: function() { setActiveStore(store); setActiveChainId(chain.id); setAddDateVal(todayISO()); setView("history"); }
-          }, "📜"),
-          React.createElement("button", {
-            style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }),
-            onClick: function() { confirmDelete("Remove #" + store.name + "?", "Remove from list?", function() { handleDeleteStore(chain.id, store.id); }); }
-          }, "✕")
-        )
+        React.createElement("button", {
+          style: { background: C.cyanDim, border: "1px solid " + C.cyan + "33", borderRadius: 6, padding: "4px 9px", fontSize: 13, fontWeight: 600, color: C.cyan, cursor: "pointer", flexShrink: 0 },
+          onClick: function() { openStoreInfo(store, chain, "info"); }
+        }, "ℹ"),
+        React.createElement("button", {
+          style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }),
+          onClick: function() { confirmDelete("Remove #" + store.name + "?", "Remove from list?", function() { handleDeleteStore(chain.id, store.id); }); }
+        }, "✕")
       )
     );
   }
 
-  // ═══ DASHBOARD ═══
+  // ─── DASHBOARD ───
   function renderDashboard() {
+    var q = search.trim().toLowerCase();
     var sorted = chains.slice().sort(sortAlpha);
     var hasStores = totalStoreCount() > 0;
-    var q = search.trim().toLowerCase();
 
     return React.createElement("div", null,
       renderProgressBar(),
-
       React.createElement("div", { style: { display: "flex", gap: 8, padding: "10px 16px", flexWrap: "wrap" } },
-        hasStores ? React.createElement("button", { style: Object.assign({}, S.toolBtn, { flex: 1, color: C.orange, borderColor: C.orange + "33", background: C.orangeDim }), onClick: handleReset }, "↻ Reset") : null,
-        hasStores ? React.createElement("button", { style: Object.assign({}, S.toolBtn, { flex: 1, color: C.green, borderColor: C.green + "33", background: C.greenDim }), onClick: exportAll }, "📤 Export") : null,
-        React.createElement("button", { style: Object.assign({}, S.toolBtn, { flex: 1, color: C.orange, borderColor: C.orange + "33", background: C.orangeDim }), onClick: triggerImport }, "📥 Import")
+        hasStores ? React.createElement("button", { style: S.toolBtn(C.orange, C.orangeDim), onClick: handleReset }, "↻ Reset") : null,
+        hasStores ? React.createElement("button", { style: S.toolBtn(C.green, C.greenDim), onClick: exportAll }, "📤 Export") : null,
+        React.createElement("button", { style: S.toolBtn(C.orange, C.orangeDim), onClick: triggerImport }, "📥 Import")
       ),
-
       hasStores ? React.createElement("div", { style: { padding: "4px 16px 8px" } },
         React.createElement("input", { type: "text", placeholder: "Search stores...", value: search, onChange: function(e) { setSearch(e.target.value); }, style: Object.assign({}, S.input, { fontSize: 14, padding: "10px 14px" }) })
       ) : null,
-
-      chains.length === 0 ?
-        React.createElement("div", { style: S.emptyState },
-          React.createElement("div", { style: { fontSize: 40, marginBottom: 12 } }, "📅"),
-          React.createElement("div", { style: { fontSize: 15, fontWeight: 600, color: C.soft, marginBottom: 6 } }, "No chains yet"),
-          React.createElement("div", { style: { fontSize: 13, color: C.muted } }, "Tap + to add chains and stores")
-        ) :
+      chains.length === 0 ? React.createElement("div", { style: { textAlign: "center", padding: "50px 32px", color: C.muted } },
+        React.createElement("div", { style: { fontSize: 40, marginBottom: 12 } }, "📅"),
+        React.createElement("div", { style: { fontSize: 15, fontWeight: 600, color: C.soft, marginBottom: 6 } }, "No chains yet"),
+        React.createElement("div", { style: { fontSize: 13, color: C.muted } }, "Tap + to add chains and stores")
+      ) :
       React.createElement("div", { style: { padding: "0 16px" } },
         sorted.map(function(chain) {
-          var stores = chain.stores.slice().sort(sortAlpha);
+          var stores = chain.stores.slice().sort(function(a, b) {
+            var an = parseInt(a.name, 10); var bn = parseInt(b.name, 10);
+            if (!isNaN(an) && !isNaN(bn)) return an - bn;
+            return (a.name || "").localeCompare(b.name || "");
+          });
           if (q) { stores = stores.filter(function(s) { return s.name.toLowerCase().indexOf(q) >= 0 || chain.name.toLowerCase().indexOf(q) >= 0; }); }
           if (stores.length === 0 && q) return null;
+          var done = chainDoneCount(chain); var total = chain.stores.length;
           var unchecked = stores.filter(function(s) { return !s.done; });
           var checked = stores.filter(function(s) { return s.done; });
-          var ordered = unchecked.concat(checked);
-          var done = chainDoneCount(chain); var total = chain.stores.length;
           return React.createElement("div", { key: chain.id, style: { marginBottom: 16 } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 6px", borderBottom: "1px solid " + C.border + "66", marginBottom: 8 } },
               React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
@@ -528,67 +840,533 @@ function MonthlyTracker() {
                 React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 8px" }), onClick: function() { confirmDelete("Delete " + chain.name + "?", "All stores removed.", function() { handleDeleteChain(chain.id); }); } }, "✕")
               )
             ),
-            stores.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" } }, "No stores") :
-            ordered.map(function(store) { return renderStoreCard(chain, store); })
+            stores.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" } }, "No stores — tap + store above") :
+            [].concat(unchecked, checked).map(function(store) { return renderStoreCard(chain, store); })
           );
         })
       ),
-
       // Extra Work
       React.createElement("div", { style: { padding: "12px 16px 0" } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
           React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: C.orange } }, "⚡ Extra Work"),
           React.createElement("div", { style: { display: "flex", gap: 6 } },
-            extraWorkDone.length > 0 ? React.createElement("button", {
-              style: { background: "transparent", border: "none", color: showEwHistory ? C.cyan : C.muted, fontSize: 10, fontFamily: "'IBM Plex Mono',monospace", cursor: "pointer", padding: "4px 0" },
-              onClick: function() { setShowEwHistory(!showEwHistory); }
-            }, showEwHistory ? "hide history" : "history (" + extraWorkDone.length + ")") : null,
-            React.createElement("button", {
-              style: { background: C.orangeDim, border: "1px solid " + C.orange + "33", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: C.orange, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
-              onClick: function() { setEwDesc(""); setView("addExtraWork"); }
-            }, "+ Add")
+            extraWorkDone.length > 0 ? React.createElement("button", { style: { background: "transparent", border: "none", color: showEwHistory ? C.cyan : C.muted, fontSize: 10, fontFamily: "'IBM Plex Mono',monospace", cursor: "pointer", padding: "4px 0" }, onClick: function() { setShowEwHistory(!showEwHistory); } }, showEwHistory ? "hide history" : "history (" + extraWorkDone.length + ")") : null,
+            React.createElement("button", { style: { background: C.orangeDim, border: "1px solid " + C.orange + "33", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: C.orange, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" }, onClick: function() { setEwDesc(""); setView("addExtraWork"); } }, "+ Add")
           )
         ),
         extraWork.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic", padding: "8px 0" } }, "No active extra work") : null,
         extraWork.map(function(ew) {
-          return React.createElement("div", {
-            key: ew.id, style: { background: C.card, border: "1px solid " + C.orange + "22", borderRadius: 10, padding: "12px 14px", marginBottom: 6 }
-          },
+          return React.createElement("div", { key: ew.id, style: { background: C.card, border: "1px solid " + C.orange + "22", borderRadius: 10, padding: "12px 14px", marginBottom: 6 } },
             React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 10 } },
-              React.createElement("div", { style: { width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.orange, flexShrink: 0, marginTop: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }, onClick: function() { completeExtraWork(ew.id); } }),
+              React.createElement("div", { style: { width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.orange, flexShrink: 0, marginTop: 1, cursor: "pointer" }, onClick: function() { completeExtraWork(ew.id); } }),
               React.createElement("div", { style: { flex: 1 } },
-                React.createElement("div", { style: { fontSize: 14, fontWeight: 500, lineHeight: 1.5 } }, ew.description),
+                React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } }, ew.description),
                 React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginTop: 4 } }, "Added " + ew.addedAt)
               ),
-              React.createElement("button", { style: S.deleteSmall, onClick: function() { confirmDelete("Remove?", '"' + ew.description + '"', function() { deleteExtraWork(ew.id); }); } }, "✕")
+              React.createElement("button", { style: S.deleteSmall, onClick: function() { setExtraWork(function(prev) { return prev.filter(function(e) { return e.id !== ew.id; }); }); } }, "✕")
             )
           );
         }),
-        // Extra work done history
         showEwHistory ? React.createElement("div", { style: { marginTop: 8 } },
           React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, "Completed Extra Work"),
           extraWorkDone.slice().reverse().map(function(ew) {
-            return React.createElement("div", {
-              key: ew.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 14px", marginBottom: 4, opacity: 0.6 }
-            },
+            return React.createElement("div", { key: ew.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 14px", marginBottom: 4, opacity: 0.6 } },
               React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
                 React.createElement("div", null,
                   React.createElement("div", { style: { fontSize: 13, color: C.soft, textDecoration: "line-through" } }, ew.description),
                   React.createElement("div", { style: { fontSize: 9, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 } }, "Done " + (ew.completedAt || ""))
                 ),
-                React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 9 }), onClick: function() { deleteExtraWorkDone(ew.id); } }, "✕")
+                React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 9 }), onClick: function() { setExtraWorkDone(function(prev) { return prev.filter(function(e) { return e.id !== ew.id; }); }); } }, "✕")
               )
             );
           })
         ) : null
       ),
-
       React.createElement("div", { style: { height: 80 } }),
       React.createElement("button", { style: S.fab, onClick: function() { setChainName(""); setView("addChain"); } }, "+")
     );
   }
 
-  // ═══ ADD CHAIN ═══
+  // ─── STORE INFO ───
+  function renderStoreInfo() {
+    var chain = activeChainForStore;
+    var store = getLiveStore();
+    if (!store) return null;
+    var si = store.settings || {};
+    var towers = si.towers || [];
+    var loops = si.loops || [];
+    var tasks = store.tasks || [];
+    var activeTasks = tasks.filter(function(t) { return !t.done; });
+    var completedTasks = tasks.filter(function(t) { return t.done; });
+    // Sort: urgent first
+    activeTasks.sort(function(a, b) { if (a.priority === "urgent" && b.priority !== "urgent") return -1; if (b.priority === "urgent" && a.priority !== "urgent") return 1; return 0; });
+    var history = (store.history || []).slice().reverse();
+
+    // Chem sub-tabs
+    var allChemSubs = towers.map(function(t) { return { key: t, label: t, isLoop: false }; }).concat(
+      loops.map(function(l) { return { key: l.name, label: l.name, isLoop: true, loop: l }; })
+    );
+    var currentChemSub = chemSub || (allChemSubs.length > 0 ? allChemSubs[0].key : null);
+    var activeSub = allChemSubs.find(function(s) { return s.key === currentChemSub; }) || null;
+
+    var tabs = [
+      { key: "info", label: "ℹ Info" },
+      { key: "chemicals", label: "🧪 Chemicals" },
+      { key: "tasks", label: "📝 Tasks" + (activeTasks.length > 0 ? " (" + activeTasks.length + ")" : "") },
+      { key: "history", label: "📜 History" },
+      { key: "managers", label: "👤 Managers" }
+    ];
+
+    var tabColors = { info: C.cyan, chemicals: C.orange, tasks: C.purple, history: C.soft, managers: C.green };
+
+    return React.createElement("div", null,
+      React.createElement("div", { style: { padding: "12px 16px 0" } },
+        React.createElement("button", { style: S.backBtn, onClick: function() { setView("dashboard"); setActiveStore(null); setActiveChainForStore(null); } }, "← Back"),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 } },
+          React.createElement("h2", { style: { fontSize: 18, fontWeight: 700, margin: 0 } }, (chain ? chain.name + " " : "") + "#" + store.name),
+          React.createElement("button", {
+            style: { background: C.greenDim, border: "1px solid " + C.green + "33", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: C.green, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
+            onClick: function() { exportStore(chain.name, store); }
+          }, "📤 Export Store")
+        )
+      ),
+      // Tabs
+      React.createElement("div", { style: { display: "flex", borderBottom: "1px solid " + C.border, overflowX: "auto" } },
+        tabs.map(function(t) {
+          var active = storeTab === t.key;
+          var col = tabColors[t.key];
+          return React.createElement("button", { key: t.key, onClick: function() { setStoreTab(t.key); },
+            style: { padding: "11px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace", background: "transparent", border: "none", color: active ? col : C.muted, borderBottom: active ? "2px solid " + col : "2px solid transparent", whiteSpace: "nowrap" }
+          }, t.label);
+        })
+      ),
+
+      // ── INFO TAB ──
+      storeTab === "info" ? React.createElement("div", { style: { padding: "12px 16px" } },
+        // Bleed
+        card(React.createElement("div", null,
+          sectionHeader("💧", "Bleed", C.cyan),
+          typeToggle([{key:"setpoint",label:"Setpoint"},{key:"pulse",label:"Pulse"}], bleedType, setBleedType),
+          bleedType === "setpoint" ? field("Setpoint (µS / TDS)", inp(bleedSetpoint, setBleedSetpoint, "e.g. 1200")) :
+          React.createElement("div", null,
+            field("Pulses", inp(bleedPulseCount, setBleedPulseCount, "e.g. 3")),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+              React.createElement("div", { style: { flex: 1 } }, field("Minutes", inp(bleedPulseMins, setBleedPulseMins, "e.g. 2"))),
+              React.createElement("div", { style: { flex: 1 } }, field("Seconds", inp(bleedPulseSecs, setBleedPulseSecs, "e.g. 30")))
+            )
+          ),
+          React.createElement("button", { style: S.saveBtn(C.cyan), onClick: function() { saveStoreSettings(chain.id, store.id, { bleedType: bleedType, bleedSetpoint: bleedSetpoint, bleedPulseCount: bleedPulseCount, bleedPulseMins: bleedPulseMins, bleedPulseSecs: bleedPulseSecs }); } }, "Save Bleed")
+        ), C.cyan),
+
+        // Chemical Control
+        card(React.createElement("div", null,
+          sectionHeader("🧴", "Chemical Control", C.purple),
+          React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 10 } }, "Applies to all towers at this store"),
+          React.createElement("div", { style: { marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid " + C.border + "44" } },
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.purple, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, "Inhibitor Program"),
+            typeToggle([{key:"cycle",label:"Cycle"},{key:"pulse",label:"Pulse"}], inhDelivery, setInhDelivery),
+            inhDelivery === "cycle" ? React.createElement("div", { style: { display: "flex", gap: 8 } },
+              React.createElement("div", { style: { flex: 1 } }, field("Minutes", inp(inhCycleMins, setInhCycleMins, "e.g. 5"))),
+              React.createElement("div", { style: { flex: 1 } }, field("Percent %", inp(inhCyclePct, setInhCyclePct, "e.g. 30")))
+            ) : React.createElement("div", null,
+              field("Pulses", inp(inhPulseCount, setInhPulseCount, "e.g. 3")),
+              React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("div", { style: { flex: 1 } }, field("Minutes", inp(inhPulseMins, setInhPulseMins, "e.g. 1"))),
+                React.createElement("div", { style: { flex: 1 } }, field("Seconds", inp(inhPulseSecs, setInhPulseSecs, "e.g. 30")))
+              )
+            )
+          ),
+          React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.yellow, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 6 } }, "Biocide Schedule"),
+          React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, "4x/day at 5:00, 11:00, 17:00, 23:00"),
+          field("Duration (minutes)", inp(biocideMins, setBiocideMins, "e.g. 15")),
+          React.createElement("button", { style: S.saveBtn(C.purple), onClick: function() { saveStoreSettings(chain.id, store.id, { inhDelivery: inhDelivery, inhCycleMins: inhCycleMins, inhCyclePct: inhCyclePct, inhPulseCount: inhPulseCount, inhPulseMins: inhPulseMins, inhPulseSecs: inhPulseSecs, biocideMins: biocideMins }); } }, "Save Chemical Control")
+        ), C.purple),
+
+        // Pumps
+        card(React.createElement("div", null,
+          sectionHeader("⚙", "Pumps", C.orange),
+          React.createElement("div", { style: { fontSize: 11, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 10 } }, "Per tower — tap to expand"),
+          towers.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic" } }, "Add towers in Loops section") :
+          towers.map(function(tower) {
+            var expanded = expandedTower === tower;
+            return React.createElement("div", { key: tower, style: { marginBottom: 6 } },
+              React.createElement("button", { onClick: function() { setExpandedTower(expanded ? null : tower); },
+                style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: expanded ? C.orangeDim : C.bg, border: "1px solid " + (expanded ? C.orange + "44" : C.border), borderRadius: expanded ? "8px 8px 0 0" : 8, padding: "10px 14px", cursor: "pointer" }
+              },
+                React.createElement("span", { style: { fontSize: 13, fontWeight: 600, color: expanded ? C.orange : C.text } }, tower),
+                React.createElement("span", { style: { fontSize: 11, color: expanded ? C.orange : C.muted, fontFamily: "'IBM Plex Mono',monospace" } }, expanded ? "▲" : "▼")
+              ),
+              expanded ? React.createElement("div", { style: { background: C.card, border: "1px solid " + C.orange + "22", borderTop: "none", borderRadius: "0 0 8px 8px", padding: "12px 14px" } },
+                ["Inhibitor Pump", "Biocide Pump"].map(function(pump, pi) {
+                  var pumpColor = pi === 0 ? C.purple : C.yellow;
+                  var pumpKey = (tower + "_" + pump).replace(/\s/g, "_");
+                  var towerPumps = (si.pumpSettings || {})[pumpKey] || {};
+                  return React.createElement("div", { key: pump, style: { marginBottom: pi === 0 ? 12 : 0, paddingBottom: pi === 0 ? 12 : 0, borderBottom: pi === 0 ? "1px solid " + C.border + "44" : "none" } },
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: pumpColor, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, pump),
+                    field("Pump Type",
+                      typeToggle([{key:"speed_stroke",label:"Speed & Stroke"},{key:"stroke",label:"Stroke Only"}],
+                        towerPumps.type || "speed_stroke",
+                        function(v) {
+                          var ps = Object.assign({}, si.pumpSettings || {});
+                          ps[pumpKey] = Object.assign({}, ps[pumpKey] || {}, { type: v });
+                          saveStoreSettings(chain.id, store.id, { pumpSettings: ps });
+                        }
+                      )
+                    ),
+                    (towerPumps.type === "speed_stroke" || !towerPumps.type) ? React.createElement("div", { style: { display: "flex", gap: 8 } },
+                      React.createElement("div", { style: { flex: 1 } }, field("Speed", React.createElement("input", { type: "number", placeholder: "e.g. 60", defaultValue: towerPumps.speed || "", style: S.input, onBlur: function(e) { var ps = Object.assign({}, si.pumpSettings || {}); ps[pumpKey] = Object.assign({}, ps[pumpKey] || {}, { speed: e.target.value }); saveStoreSettings(chain.id, store.id, { pumpSettings: ps }); } }))),
+                      React.createElement("div", { style: { flex: 1 } }, field("Stroke %", React.createElement("input", { type: "number", placeholder: "e.g. 30", defaultValue: towerPumps.stroke || "", style: S.input, onBlur: function(e) { var ps = Object.assign({}, si.pumpSettings || {}); ps[pumpKey] = Object.assign({}, ps[pumpKey] || {}, { stroke: e.target.value }); saveStoreSettings(chain.id, store.id, { pumpSettings: ps }); } })))
+                    ) :
+                    field("Stroke %", React.createElement("input", { type: "number", placeholder: "e.g. 50", defaultValue: towerPumps.stroke || "", style: S.input, onBlur: function(e) { var ps = Object.assign({}, si.pumpSettings || {}); ps[pumpKey] = Object.assign({}, ps[pumpKey] || {}, { stroke: e.target.value }); saveStoreSettings(chain.id, store.id, { pumpSettings: ps }); } }))
+                  );
+                })
+              ) : null
+            );
+          })
+        ), C.orange),
+
+        // Towers + Loops
+        card(React.createElement("div", null,
+          React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+            sectionHeader("🏗", "Towers & Loops", C.cyan),
+            React.createElement("button", { onClick: function() { setShowAddLoop(!showAddLoop); },
+              style: { background: C.cyanDim, border: "1px solid " + C.cyan + "33", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: C.cyan, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" }
+            }, showAddLoop ? "Cancel" : "+ Add")
+          ),
+          // Add form
+          showAddLoop ? React.createElement("div", { style: { background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: 12, marginBottom: 10 } },
+            // Tower or Loop selector
+            field("Type",
+              React.createElement("div", null,
+                React.createElement("select", { value: loopType, onChange: function(e) { setLoopType(e.target.value); }, style: Object.assign({}, S.input, { cursor: "pointer" }) },
+                  ["Tower"].concat(LOOP_TYPES).map(function(t) { return React.createElement("option", { key: t, value: t }, t); })
+                )
+              )
+            ),
+            field("Name", inp(loopName, setLoopName, "e.g. Tower 1, Chiller Loop 1")),
+            loopType !== "Tower" ? field("GPM", inp(loopGpm, setLoopGpm, "e.g. 100", "number")) : null,
+            React.createElement("button", {
+              style: S.saveBtn(C.cyan),
+              onClick: function() {
+                if (loopType === "Tower") {
+                  var name = loopName.trim();
+                  if (!name) return;
+                  var newTowers = towers.concat([name]);
+                  saveStoreSettings(chain.id, store.id, { towers: newTowers });
+                  setLoopName(""); setShowAddLoop(false); showToast(name + " added");
+                } else { addLoop(chain.id, store.id); }
+              }
+            }, "Add " + (loopType === "Tower" ? "Tower" : "Loop"))
+          ) : null,
+          // Towers list
+          towers.length === 0 && loops.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic" } }, "No towers or loops yet") : null,
+          towers.map(function(t, i) {
+            return React.createElement("div", { key: t, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + C.border + "44" } },
+              React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { fontSize: 13, fontWeight: 500 } }, t),
+                React.createElement("span", { style: S.badge(C.cyan, C.cyanDim) }, "Tower")
+              ),
+              React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 10 }), onClick: function() { confirmDelete("Remove " + t + "?", "This removes the tower.", function() { var newTowers = towers.filter(function(_, j) { return j !== i; }); saveStoreSettings(chain.id, store.id, { towers: newTowers }); setModal(null); showToast("Tower removed"); }); } }, "✕")
+            );
+          }),
+          loops.map(function(l) {
+            var col = LOOP_COLORS[l.type] || C.cyan;
+            var gallons = l.gpm ? Math.round(parseFloat(l.gpm) * 4) : 0;
+            return React.createElement("div", { key: l.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + C.border + "44" } },
+              React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 500, color: col } }, l.name),
+                React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 } }, l.type + " · " + l.gpm + " GPM · ~" + gallons + " gal")
+              ),
+              React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 10 }), onClick: function() { confirmDelete("Remove " + l.name + "?", "Loop removed.", function() { deleteLoop(chain.id, store.id, l.id); }); } }, "✕")
+            );
+          })
+        ), C.cyan),
+
+        // Notes
+        card(React.createElement("div", null,
+          sectionHeader("📝", "Notes", C.soft),
+          React.createElement("textarea", { placeholder: "General store notes...", value: storeNotes, onChange: function(e) { setStoreNotes(e.target.value); }, style: S.textarea }),
+          React.createElement("button", { style: S.saveBtn(C.soft), onClick: function() { saveStoreSettings(chain.id, store.id, { notes: storeNotes }); } }, "Save Notes")
+        ))
+      ) : null,
+
+      // ── CHEMICALS TAB ──
+      storeTab === "chemicals" ? React.createElement("div", null,
+        allChemSubs.length === 0 ? React.createElement("div", { style: { textAlign: "center", padding: "40px 16px", color: C.muted } },
+          React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "🏗️"),
+          React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: C.soft, marginBottom: 6 } }, "No towers or loops yet"),
+          React.createElement("div", { style: { fontSize: 12 } }, "Add them in the ℹ Info tab first")
+        ) :
+        React.createElement("div", null,
+          // Sub-tabs
+          React.createElement("div", { style: { display: "flex", overflowX: "auto", borderBottom: "1px solid " + C.border } },
+            allChemSubs.map(function(sub) {
+              var active = currentChemSub === sub.key;
+              var col = sub.isLoop ? (LOOP_COLORS[sub.loop.type] || C.cyan) : C.orange;
+              return React.createElement("button", { key: sub.key, onClick: function() { setChemSub(sub.key); },
+                style: { padding: "10px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace", background: "transparent", border: "none", color: active ? col : C.muted, borderBottom: active ? "2px solid " + col : "2px solid transparent", whiteSpace: "nowrap" }
+              }, sub.label);
+            })
+          ),
+          // Tower: inhibitor/biocide
+          activeSub && !activeSub.isLoop ? React.createElement("div", { style: { display: "flex", borderBottom: "1px solid " + C.border + "66" } },
+            [{key:"inhibitor",label:"🧴 Inhibitor",col:C.purple},{key:"biocide",label:"⚗ Biocide",col:C.yellow}].map(function(ct) {
+              var active = chemType === ct.key;
+              return React.createElement("button", { key: ct.key, onClick: function() { setChemType(ct.key); },
+                style: { flex: 1, padding: "10px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace", background: "transparent", border: "none", color: active ? ct.col : C.muted, borderBottom: active ? "2px solid " + ct.col : "2px solid transparent" }
+              }, ct.label);
+            })
+          ) : null,
+          React.createElement("div", { style: { padding: "12px 16px" } },
+            activeSub && activeSub.isLoop ? (function() {
+              var loop = activeSub.loop;
+              var col = LOOP_COLORS[loop.type] || C.cyan;
+              var gallons = loop.gpm ? Math.round(parseFloat(loop.gpm) * 4) : 0;
+              var loopChems = (store.chemicals && store.chemicals[loop.name]) ? store.chemicals[loop.name] : [];
+              var byMonth = {}; var monthOrder = [];
+              var reversed = loopChems.slice().reverse();
+              for (var i = 0; i < reversed.length; i++) {
+                var mk = reversed[i].month || "Unknown";
+                if (!byMonth[mk]) { byMonth[mk] = []; monthOrder.push(mk); }
+                byMonth[mk].push(reversed[i]);
+              }
+              // Nitrite calc
+              var ppmNum = parseFloat(nitritePPM);
+              var alreadyGood = nitritePPM && ppmNum >= 1400;
+              var calcResult = nitritePPM && gallons > 0 && !alreadyGood ? calcNitrite(gallons, ppmNum) : null;
+              return card(React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: col, marginBottom: 4 } }, loop.name),
+                React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 12 } }, loop.type + " · ~" + gallons + " gal"),
+                // Nitrite calculator
+                React.createElement("div", { style: { marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid " + C.border + "44" } },
+                  React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.green, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 6 } }, "🧪 Nitrite Calculator"),
+                  React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, "Target: 1400 PPM · 1 lb = 100 gal at 1000 PPM · 1 qt = 2.5 lbs"),
+                  field("Current Nitrite (PPM)", React.createElement("input", { type: "number", placeholder: "e.g. 800", value: nitritePPM, onChange: function(e) { setNitritePPM(e.target.value); }, style: S.input })),
+                  nitritePPM && gallons > 0 && alreadyGood ? React.createElement("div", { style: { background: C.greenDim, border: "1px solid " + C.green + "33", borderRadius: 8, padding: "10px 14px" } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.green } }, "✓ Already at target"),
+                    React.createElement("div", { style: { fontSize: 10, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 } }, ppmNum + " PPM ≥ 1400 PPM")
+                  ) : null,
+                  calcResult ? React.createElement("div", { style: { background: C.yellowDim, border: "1px solid " + C.yellow + "33", borderRadius: 8, padding: "10px 14px" } },
+                    React.createElement("div", { style: { fontSize: 10, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 6 } }, "Raise by " + calcResult.needed + " PPM in " + gallons + " gal"),
+                    React.createElement("div", { style: { display: "flex", gap: 16 } },
+                      React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, "Nitrite"),
+                        React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: C.yellow, fontFamily: "'IBM Plex Mono',monospace" } }, calcResult.lbs + " lbs")
+                      ),
+                      React.createElement("div", { style: { width: 1, background: C.border } }),
+                      React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10, color: C.soft, fontFamily: "'IBM Plex Mono',monospace" } }, "Or"),
+                        React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: C.orange, fontFamily: "'IBM Plex Mono',monospace" } }, calcResult.qts + " qt")
+                      )
+                    )
+                  ) : null
+                ),
+                // Log chemical
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: col, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 8 } }, "📋 Chemical Log"),
+                React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8 } },
+                  React.createElement("div", { style: { flex: 1 } },
+                    React.createElement("label", { style: S.label }, "Amount (lbs)"),
+                    React.createElement("input", { type: "number", placeholder: "e.g. 2", value: chemAmount, onChange: function(e) { setChemAmount(e.target.value); }, style: S.input })
+                  )
+                ),
+                React.createElement("button", { style: Object.assign({}, S.saveBtn(col), { opacity: chemAmount.trim() ? 1 : 0.4 }), onClick: function() { setChemUnit("lbs"); addLoopChemEntry(chain.id, store.id, loop.name); } }, "+ Log Chemical"),
+                loopChems.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic", marginTop: 12 } }, "No chemicals logged yet") :
+                React.createElement("div", { style: { marginTop: 12 } },
+                  monthOrder.map(function(mk) {
+                    return React.createElement("div", { key: mk, style: { marginBottom: 10 } },
+                      React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 4 } }, getMonthLabel(mk)),
+                      byMonth[mk].map(function(entry) {
+                        return React.createElement("div", { key: entry.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid " + C.border + "44" } },
+                          React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace" } }, entry.addedAt),
+                          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                            React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: col, fontFamily: "'IBM Plex Mono',monospace" } }, entry.amount + " " + entry.unit),
+                            React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 10 }), onClick: function() { deleteChemEntry(chain.id, store.id, loop.name, null, entry.id); } }, "✕")
+                          )
+                        );
+                      })
+                    );
+                  })
+                )
+              ), col);
+            })() :
+            activeSub && !activeSub.isLoop ? (function() {
+              var chemColor = chemType === "inhibitor" ? C.purple : C.yellow;
+              var chemData = (store.chemicals && store.chemicals[activeSub.key] && store.chemicals[activeSub.key][chemType]) ? store.chemicals[activeSub.key][chemType] : [];
+              var byMonth = {}; var monthOrder = [];
+              var reversed = chemData.slice().reverse();
+              for (var i = 0; i < reversed.length; i++) {
+                var mk = reversed[i].month || "Unknown";
+                if (!byMonth[mk]) { byMonth[mk] = []; monthOrder.push(mk); }
+                byMonth[mk].push(reversed[i]);
+              }
+              return card(React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: chemColor, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 10 } }, "Add " + (chemType === "inhibitor" ? "Inhibitor" : "Biocide") + " — " + activeSub.label),
+                React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid " + C.border + "44" } },
+                  React.createElement("div", { style: { flex: 1 } },
+                    React.createElement("label", { style: S.label }, "Amount (gal)"),
+                    React.createElement("input", { type: "number", placeholder: "e.g. 1.5", value: chemAmount, onChange: function(e) { setChemAmount(e.target.value); }, style: S.input })
+                  )
+                ),
+                React.createElement("button", { style: Object.assign({}, S.saveBtn(chemColor), { opacity: chemAmount.trim() ? 1 : 0.4 }), onClick: function() { setChemUnit("gal"); addChemicalEntry(chain.id, store.id, activeSub.key, chemType); } }, "+ Add " + (chemType === "inhibitor" ? "Inhibitor" : "Biocide")),
+                chemData.length === 0 ? React.createElement("div", { style: { fontSize: 12, color: C.muted, fontStyle: "italic", marginTop: 12 } }, "No " + chemType + " logged for " + activeSub.label + " yet") :
+                React.createElement("div", { style: { marginTop: 12 } },
+                  monthOrder.map(function(mk) {
+                    return React.createElement("div", { key: mk, style: { marginBottom: 10 } },
+                      React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.soft, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 4 } }, getMonthLabel(mk)),
+                      byMonth[mk].map(function(entry) {
+                        return React.createElement("div", { key: entry.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid " + C.border + "44" } },
+                          React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace" } }, entry.addedAt),
+                          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                            React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: chemColor, fontFamily: "'IBM Plex Mono',monospace" } }, entry.amount + " " + entry.unit),
+                            React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "3px 6px", fontSize: 10 }), onClick: function() { deleteChemEntry(chain.id, store.id, activeSub.key, chemType, entry.id); } }, "✕")
+                          )
+                        );
+                      })
+                    );
+                  })
+                )
+              ), chemColor);
+            })() : null
+          )
+        )
+      ) : null,
+
+      // ── TASKS TAB ──
+      storeTab === "tasks" ? React.createElement("div", { style: { padding: "12px 16px" } },
+        // Add task form
+        card(React.createElement("div", null,
+          React.createElement("div", { style: { marginBottom: 10 } },
+            React.createElement("label", { style: S.label }, "What needs to be done?"),
+            React.createElement("textarea", { placeholder: "e.g. Replace tubing on pump, Cover holes for birds...", value: taskDesc, onChange: function(e) { setTaskDesc(e.target.value); }, style: Object.assign({}, S.textarea, { minHeight: 60 }) })
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 10 } },
+            [{key:"urgent",label:"▲ Urgent",color:C.red,bg:C.redDim},{key:"normal",label:"Non-Urgent",color:C.yellow,bg:C.yellowDim}].map(function(p) {
+              var sel = taskPriority === p.key;
+              return React.createElement("button", { key: p.key, style: { flex: 1, padding: "10px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", background: sel ? p.bg : C.bg, border: "2px solid " + (sel ? p.color : C.border), color: sel ? p.color : C.muted }, onClick: function() { setTaskPriority(p.key); } }, p.label);
+            })
+          ),
+          React.createElement("button", { style: Object.assign({}, S.primaryBtn, { opacity: taskDesc.trim() ? 1 : 0.4 }), onClick: function() { addTask(chain.id, store.id); } }, "+ Add Task")
+        )),
+        // Active tasks
+        activeTasks.length === 0 && completedTasks.length === 0 ? React.createElement("div", { style: { textAlign: "center", padding: "30px 0", color: C.muted } },
+          React.createElement("div", { style: { fontSize: 36, marginBottom: 8 } }, "✅"),
+          React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: C.soft } }, "No tasks yet")
+        ) :
+        activeTasks.length === 0 ? React.createElement("div", { style: { textAlign: "center", padding: "20px 0", color: C.green } },
+          React.createElement("div", { style: { fontSize: 28, marginBottom: 6 } }, "✅"),
+          React.createElement("div", { style: { fontSize: 14, fontWeight: 600 } }, "All tasks done!")
+        ) :
+        activeTasks.map(function(task) {
+          var isUrgent = task.priority === "urgent";
+          return React.createElement("div", { key: task.id, style: { background: C.card, border: "1px solid " + (isUrgent ? C.red + "33" : C.border), borderRadius: 10, padding: "12px 14px", marginBottom: 6, borderLeft: "3px solid " + (isUrgent ? C.red : C.yellow) } },
+            React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 10 } },
+              React.createElement("div", { style: { width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.muted, flexShrink: 0, marginTop: 1, cursor: "pointer" }, onClick: function() { toggleTask(chain.id, store.id, task.id); } }),
+              React.createElement("div", { style: { flex: 1 } },
+                React.createElement("div", { style: { fontSize: 14, fontWeight: 500, lineHeight: 1.5 } }, task.description),
+                React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginTop: 4 } },
+                  React.createElement("span", { style: S.badge(isUrgent ? C.red : C.yellow, isUrgent ? C.redDim : C.yellowDim) }, isUrgent ? "Urgent" : "Non-Urgent"),
+                  React.createElement("span", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace" } }, "Added " + task.addedAt)
+                )
+              ),
+              React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }), onClick: function() { confirmDelete("Delete task?", '"' + task.description + '"', function() { deleteTask(chain.id, store.id, task.id); }); } }, "✕")
+            )
+          );
+        }),
+        // Completed tasks
+        completedTasks.length > 0 ? React.createElement("div", { style: { marginTop: 16 } },
+          React.createElement("button", { style: { background: "none", border: "none", color: C.soft, fontSize: 13, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, cursor: "pointer", padding: "6px 0", display: "flex", alignItems: "center", gap: 6 }, onClick: function() { setShowCompletedTasks(!showCompletedTasks); } },
+            React.createElement("span", { style: { fontSize: 10 } }, showCompletedTasks ? "▼" : "▶"),
+            "Completed (" + completedTasks.length + ")"
+          ),
+          showCompletedTasks ? completedTasks.map(function(task) {
+            return React.createElement("div", { key: task.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "12px 14px", marginBottom: 6, opacity: 0.6 } },
+              React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 10 } },
+                React.createElement("div", { style: { width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.green, background: C.greenDim, flexShrink: 0, marginTop: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: C.green, fontWeight: 700 }, onClick: function() { toggleTask(chain.id, store.id, task.id); } }, "✓"),
+                React.createElement("div", { style: { flex: 1 } },
+                  React.createElement("div", { style: { fontSize: 14, textDecoration: "line-through", color: C.muted } }, task.description),
+                  React.createElement("div", { style: { fontSize: 10, color: C.muted, fontFamily: "'IBM Plex Mono',monospace", marginTop: 2 } }, "Done " + (task.completedAt || ""))
+                ),
+                React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }), onClick: function() { confirmDelete("Delete?", '"' + task.description + '"', function() { deleteTask(chain.id, store.id, task.id); }); } }, "✕")
+              )
+            );
+          }) : null
+        ) : null
+      ) : null,
+
+      // ── HISTORY TAB ──
+      storeTab === "history" ? React.createElement("div", { style: { padding: "12px 16px" } },
+        React.createElement("div", { style: { fontSize: 13, color: C.soft, marginBottom: 14, fontFamily: "'IBM Plex Mono',monospace" } }, history.length + " visit" + (history.length === 1 ? "" : "s")),
+        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
+          React.createElement("input", { type: "date", value: addDateVal, onChange: function(e) { setAddDateVal(e.target.value); }, style: Object.assign({}, S.input, { flex: 1, colorScheme: "dark" }) }),
+          React.createElement("button", { style: { background: C.cyan, border: "none", borderRadius: 8, padding: "0 16px", fontSize: 14, fontWeight: 700, color: "#000", cursor: "pointer" }, onClick: function() { if (addDateVal) addDateToStore(chain.id, store.id, addDateVal); } }, "+ Add")
+        ),
+        history.length === 0 ? React.createElement("div", { style: { fontSize: 13, color: C.muted, fontStyle: "italic" } }, "No visits recorded yet") :
+        history.map(function(h, i) {
+          var realIdx = history.length - 1 - i;
+          return React.createElement("div", { key: i, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 14px", marginBottom: 6 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+              React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { fontSize: 14, fontWeight: 600, color: C.green } }, "✓"),
+                React.createElement("input", { type: "date", defaultValue: (function() { var p = h.date.split("/"); return p.length === 3 ? p[2] + "-" + p[0].padStart(2,"0") + "-" + p[1].padStart(2,"0") : ""; })(), style: { background: "transparent", border: "none", color: C.text, fontSize: 13, fontFamily: "'IBM Plex Mono',monospace", outline: "none", colorScheme: "dark" }, onChange: function(e) { editDateInStore(chain.id, store.id, realIdx, e.target.value); } })
+              ),
+              React.createElement("button", { style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }), onClick: function() { removeDateFromStore(chain.id, store.id, realIdx); } }, "✕")
+            )
+          );
+        })
+      ) : null,
+
+      // ── MANAGERS TAB ──
+      storeTab === "managers" ? React.createElement("div", { style: { padding: "12px 16px" } },
+        // Add/Edit form
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+          React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: C.green } }, "👤 Managers"),
+          React.createElement("button", {
+            style: { background: C.greenDim, border: "1px solid " + C.green + "33", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: C.green, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
+            onClick: function() { setShowMgrForm(!showMgrForm); setEditMgr(null); setMgrName(""); setMgrRole(""); setMgrPhone(""); setMgrNotes(""); }
+          }, showMgrForm ? "Cancel" : "+ Add Manager")
+        ),
+        showMgrForm ? card(React.createElement("div", null,
+          React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.green, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 10 } }, editMgr ? "Edit Manager" : "Add Manager"),
+          field("Name *", React.createElement("input", { type: "text", placeholder: "Manager's name", value: mgrName, onChange: function(e) { setMgrName(e.target.value); }, style: S.input, autoFocus: true })),
+          field("Role / Title", React.createElement("input", { type: "text", placeholder: "e.g. Store Manager, Facilities", value: mgrRole, onChange: function(e) { setMgrRole(e.target.value); }, style: S.input })),
+          field("Phone", React.createElement("input", { type: "tel", placeholder: "(555) 123-4567", value: mgrPhone, onChange: function(e) { setMgrPhone(e.target.value); }, style: S.input })),
+          field("Notes", React.createElement("textarea", { placeholder: "Schedule, personality, best contact method...", value: mgrNotes, onChange: function(e) { setMgrNotes(e.target.value); }, style: Object.assign({}, S.textarea, { minHeight: 60 }) })),
+          React.createElement("button", { style: Object.assign({}, S.saveBtn(C.green), { opacity: mgrName.trim() ? 1 : 0.4 }), onClick: function() { saveManager(chain.id, store.id); } }, editMgr ? "Save Changes" : "Add Manager")
+        ), C.green) : null,
+        // Managers list
+        (store.managers || []).length === 0 && !showMgrForm ?
+          React.createElement("div", { style: { textAlign: "center", padding: "30px 0", color: C.muted } },
+            React.createElement("div", { style: { fontSize: 36, marginBottom: 8 } }, "👤"),
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: C.soft, marginBottom: 4 } }, "No managers yet"),
+            React.createElement("div", { style: { fontSize: 12 } }, "Tap + Add Manager above")
+          ) :
+        (store.managers || []).map(function(mgr) {
+          return React.createElement("div", { key: mgr.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px", marginBottom: 8 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+              React.createElement("div", { style: { flex: 1 } },
+                React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 2 } }, mgr.name),
+                mgr.role ? React.createElement("div", { style: { fontSize: 12, color: C.cyan, fontFamily: "'IBM Plex Mono',monospace", marginBottom: 4 } }, mgr.role) : null,
+                mgr.notes ? React.createElement("div", { style: { fontSize: 13, color: C.soft, marginTop: 4, lineHeight: 1.5 } }, mgr.notes) : null,
+                mgr.phone ? React.createElement("a", { href: "tel:" + mgr.phone, style: { display: "inline-block", marginTop: 6, fontSize: 12, color: C.green, fontFamily: "'IBM Plex Mono',monospace", textDecoration: "none" } }, "📞 " + mgr.phone) : null
+              ),
+              React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 } },
+                React.createElement("button", {
+                  style: { background: C.cyanDim, border: "1px solid " + C.cyan + "33", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: C.cyan, cursor: "pointer", fontFamily: "'IBM Plex Mono',monospace" },
+                  onClick: function() { setEditMgr(mgr); setMgrName(mgr.name); setMgrRole(mgr.role || ""); setMgrPhone(mgr.phone || ""); setMgrNotes(mgr.notes || ""); setShowMgrForm(true); }
+                }, "Edit"),
+                React.createElement("button", {
+                  style: S.deleteSmall,
+                  onClick: function() { confirmDelete("Remove " + mgr.name + "?", "Remove this manager?", function() { deleteManager(chain.id, store.id, mgr.id); }); }
+                }, "✕")
+              )
+            )
+          );
+        })
+      ) : null
+    );
+  }
+
+  // ─── ADD CHAIN ───
   function renderAddChain() {
     return React.createElement("div", { style: { padding: "12px 16px" } },
       React.createElement("button", { style: S.backBtn, onClick: function() { setView("dashboard"); } }, "← Cancel"),
@@ -601,7 +1379,7 @@ function MonthlyTracker() {
     );
   }
 
-  // ═══ ADD STORE ═══
+  // ─── ADD STORE ───
   function renderAddStore() {
     var chain = findChain(activeChainId);
     return React.createElement("div", { style: { padding: "12px 16px" } },
@@ -616,7 +1394,7 @@ function MonthlyTracker() {
     );
   }
 
-  // ═══ ADD EXTRA WORK ═══
+  // ─── ADD EXTRA WORK ───
   function renderAddExtraWork() {
     return React.createElement("div", { style: { padding: "12px 16px" } },
       React.createElement("button", { style: S.backBtn, onClick: function() { setView("dashboard"); } }, "← Cancel"),
@@ -629,79 +1407,22 @@ function MonthlyTracker() {
     );
   }
 
-  // ═══ HISTORY VIEW — add/edit/delete dates ═══
-  function renderHistory() {
-    var chain = findChain(activeChainId);
-    var store = null;
-    if (chain) { for (var i = 0; i < chain.stores.length; i++) { if (chain.stores[i].id === activeStore.id) { store = chain.stores[i]; break; } } }
-    if (!store) return null;
-    var history = (store.history || []).slice();
-
-    return React.createElement("div", { style: { padding: "12px 16px" } },
-      React.createElement("button", { style: S.backBtn, onClick: function() { setView("dashboard"); setActiveStore(null); } }, "← Back"),
-      React.createElement("h2", { style: { fontSize: 18, fontWeight: 700, margin: "0 0 4px" } }, (chain ? chain.name + " " : "") + "#" + store.name),
-      React.createElement("div", { style: { fontSize: 13, color: C.soft, marginBottom: 16 } }, history.length + " visit" + (history.length === 1 ? "" : "s")),
-
-      // Add date
-      React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
-        React.createElement("input", {
-          type: "date", value: addDateVal,
-          onChange: function(e) { setAddDateVal(e.target.value); },
-          style: Object.assign({}, S.input, { flex: 1, colorScheme: "dark" })
-        }),
-        React.createElement("button", {
-          style: { background: C.cyan, border: "none", borderRadius: 8, padding: "0 16px", fontSize: 14, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "'IBM Plex Sans',sans-serif" },
-          onClick: function() { if (addDateVal) { addDateToStore(chain.id, store.id, addDateVal); setAddDateVal(todayISO()); } }
-        }, "+ Add")
-      ),
-
-      // Date list (newest first)
-      history.length === 0 ?
-        React.createElement("div", { style: { fontSize: 13, color: C.muted, fontStyle: "italic", padding: "16px 0" } }, "No visits recorded") :
-      history.slice().reverse().map(function(h, ri) {
-        var realIdx = history.length - 1 - ri;
-        return React.createElement("div", {
-          key: ri, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 14px", marginBottom: 6 }
-        },
-          React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-              React.createElement("span", { style: { fontSize: 14, fontWeight: 600, color: C.green } }, "✓"),
-              React.createElement("input", {
-                type: "date", defaultValue: displayToISO(h.date),
-                style: { background: "transparent", border: "none", color: C.text, fontSize: 13, fontFamily: "'IBM Plex Mono',monospace", outline: "none", colorScheme: "dark" },
-                onChange: function(e) { editDateInStore(chain.id, store.id, realIdx, e.target.value); }
-              })
-            ),
-            React.createElement("button", {
-              style: Object.assign({}, S.deleteSmall, { padding: "4px 8px" }),
-              onClick: function() { removeDateFromStore(chain.id, store.id, realIdx); }
-            }, "✕")
-          )
-        );
-      })
-    );
-  }
-
-  // ═══ RENDER ═══
+  // ─── RENDER ───
   var content;
   if (view === "dashboard") content = renderDashboard();
+  else if (view === "storeInfo") content = renderStoreInfo();
   else if (view === "addChain") content = renderAddChain();
   else if (view === "addStore") content = renderAddStore();
   else if (view === "addExtraWork") content = renderAddExtraWork();
-  else if (view === "history") content = renderHistory();
   else content = renderDashboard();
 
   return React.createElement("div", {
     style: { background: C.bg, minHeight: "100vh", color: C.text, fontFamily: "'IBM Plex Sans',sans-serif", maxWidth: 480, margin: "0 auto", paddingBottom: 80, position: "relative" }
   },
     React.createElement("link", { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" }),
-    React.createElement("style", null,
-      "@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }" +
-      "* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }" +
-      "input:focus, textarea:focus { border-color: " + C.cyan + " !important; }" +
-      "::-webkit-scrollbar { width: 0; }"
-    ),
+    React.createElement("style", null, "@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }input:focus, textarea:focus, select:focus { border-color: " + C.cyan + " !important; }::-webkit-scrollbar { width: 0; }"),
     React.createElement("input", { ref: fileInputRef, type: "file", accept: ".json", style: { display: "none" }, onChange: handleImportFile }),
+    // Header
     React.createElement("div", { style: { padding: "16px 16px 12px", borderBottom: "1px solid " + C.border, position: "sticky", top: 0, background: C.bg, zIndex: 100 } },
       React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
         React.createElement("div", null,
@@ -724,10 +1445,6 @@ var root = ReactDOM.createRoot(rootEl);
 root.render(React.createElement(MonthlyTracker));
 
   </script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(function() {});
-    }
-  </script>
+  <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function() {}); }</script>
 </body>
 </html>
